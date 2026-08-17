@@ -1,0 +1,40 @@
+# Pinned to the versions installed in the project venv (python -m venv venv)
+pandas==2.3.3
+numpy==2.4.6
+pyarrow==24.0.0
+fastparquet==2026.5.0
+requests==2.34.2
+scikit-learn==1.9.0
+matplotlib==3.11.0
+seaborn==0.13.2
+mlflow==3.14.0
+jupyter==1.1.1
+
+# --- Phase 3: transformer fine-tuning (install into the same venv) ---
+# CPU/Apple-MPS builds; no CUDA needed on the M4 MacBook Air.
+#   pip install "torch>=2.2" "transformers>=4.40,<5" "peft>=0.10" "datasets>=2.19" "accelerate>=0.30"
+torch>=2.2
+transformers>=4.40,<5
+peft>=0.10
+datasets>=2.19
+accelerate>=0.30
+
+# --- Phase 4: emerging-issue detection (install into the same venv) ---
+# Sentence embeddings + BERTopic (UMAP + HDBSCAN). Inference only, runs on the
+# Mac with no GPU. BERTopic pulls in umap-learn and hdbscan, but they are listed
+# explicitly so the notebook's install line matches this file.
+#   pip install sentence-transformers bertopic umap-learn hdbscan
+sentence-transformers>=2.7
+bertopic>=0.16
+umap-learn>=0.5
+hdbscan>=0.8.33
+
+# --- Phase 5: grounded LLM weekly brief ---
+# The OpenAI client talks to Groq's free, no-card, OpenAI-compatible endpoint.
+# python-dotenv loads GROQ_API_KEY from a local .env file (never committed).
+# The retrieval, offline brief, and groundedness audit use pandas + scikit-learn
+# only (already pinned above), so the audit and tests run with no API key at all.
+#   pip install openai python-dotenv pytest
+openai>=1.30
+python-dotenv>=1.0
+pytest>=8.0

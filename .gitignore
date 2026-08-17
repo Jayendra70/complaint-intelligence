@@ -1,0 +1,24 @@
+# Data & experiment artifacts (never committed)
+data/raw/
+data/processed/
+mlruns/
+mlflow.db
+
+# Environments
+venv/
+.venv/
+.env
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+
+# Local scratch
+_to_delete/
+
+# one-time transfer artifacts
+*_export.csv.gz
