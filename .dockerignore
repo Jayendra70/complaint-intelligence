@@ -1,0 +1,28 @@
+# Keep the Docker build context small and the image clean.
+
+# Environments
+venv/
+.venv/
+.env
+
+# Experiment tracking + raw/large data the API does not need
+mlruns/
+mlruns_colab/
+mlflow.db
+data/raw/
+data/processed/train.parquet
+data/processed/train_natural.parquet
+data/processed/test.parquet
+
+# Notebooks and figures are not needed at serving time
+notebooks/
+reports/figures/
+
+# Python / OS junk
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+.DS_Store
+.git/
+_to_delete/

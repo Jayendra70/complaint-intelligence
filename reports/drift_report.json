@@ -1,0 +1,24 @@
+{
+  "current_data": "test.parquet",
+  "reference_rows": 47121,
+  "current_rows": 34694,
+  "checks": [
+    {
+      "metric": "narrative_length_psi",
+      "value": 0.012,
+      "severity": "none"
+    },
+    {
+      "metric": "narrative_length_ks",
+      "statistic": 0.0338,
+      "p_value": 9.2e-05,
+      "drifted": true
+    },
+    {
+      "metric": "predicted_product_psi",
+      "value": 0.7942,
+      "severity": "major"
+    }
+  ],
+  "drift_detected": true
+}

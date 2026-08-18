@@ -1,0 +1,14 @@
+# Lean dependency set for the FastAPI serving image (Phase 6).
+# Deliberately does NOT include torch/transformers/bertopic - the SHIPPED model
+# is the scikit-learn baseline, so the API only needs the light stack below.
+# scikit-learn is pinned to 1.9.0 because that is the version that pickled the
+# saved models in models/ (loading a pickle with a different sklearn can break).
+fastapi==0.141.1
+uvicorn[standard]==0.52.3
+pydantic==2.13.4
+scikit-learn==1.9.0
+scipy==1.17.1
+pandas==2.3.3
+pyarrow==24.0.0
+numpy==2.4.6
+joblib==1.5.3
