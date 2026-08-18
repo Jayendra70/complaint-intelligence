@@ -1,3 +1,6 @@
+# FULL development environment: modelling (torch/transformers/bertopic) + serving.
+# Use this for notebooks, training, and running the whole project locally.
+# For the API / Docker image ONLY, use the lean, torch-free requirements-serving.txt.
 # Pinned to the versions installed in the project venv (python -m venv venv)
 pandas==2.3.3
 numpy==2.4.6

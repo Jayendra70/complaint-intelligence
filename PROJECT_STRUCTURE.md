@@ -51,8 +51,7 @@ complaint-intelligence/
 │   ├── test_api.py                 (Phase 6 — 6 FastAPI smoke tests)
 │   └── test_drift.py               (Phase 6 — 2 drift smoke tests)
 ├── dashboard/                      (empty — Phase 7 Streamlit app)
-├── mlruns_colab/                   (Colab MLflow run records — committed as experiment evidence)
-├── mlruns/, mlflow.db              (local MLflow tracking; gitignored)
+├── mlruns_colab/, mlflow.db        (local MLflow tracking — gitignored, kept off GitHub)
 └── venv/                           ⚠️ recreate before running (see the venv note in the project docs)
 ```
 

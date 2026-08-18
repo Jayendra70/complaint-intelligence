@@ -25,3 +25,8 @@ _TRASH_review_and_delete/
 
 # ── one-time transfer artifacts ──
 *_export.csv.gz
+
+# Colab MLflow logbook (kept locally, not on GitHub)
+mlruns_colab/
+# personal study plan (lives in the DL Project new folder)
+PHASE6_STUDY_PLAN.md
