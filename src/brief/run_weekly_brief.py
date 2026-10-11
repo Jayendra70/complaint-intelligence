@@ -79,6 +79,18 @@ def main():
     # 5. Save + report.
     out_path = f"reports/weekly_brief_{evidence['week']}.md"
     with open(out_path, "w") as f:
+        if result["backend"] != "offline-template":
+            # The template writes its own header; label LLM output the same way,
+            # with the model and the audit result, so a saved brief says how it
+            # was made and whether it passed.
+            verdict = "PASS" if audit_results["passed"] else "FAIL"
+            f.write(f"# Weekly Complaint Brief - week of {evidence['week']}\n\n")
+            f.write(
+                f"*Generated in LLM mode ({result['backend']}). Groundedness audit: {verdict} "
+                f"({audit_results['hallucinated_count']} invented IDs, "
+                f"{audit_results['unsupported_claim_lines']} of {audit_results['total_claim_lines']} "
+                f"claim lines uncited).*\n\n"
+            )
         f.write(result["text"])
         f.write("\n")
 
