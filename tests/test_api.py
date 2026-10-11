@@ -7,14 +7,29 @@ server and no network. Run with:  pytest tests/test_api.py
 
 They are "smoke" tests: they check each endpoint responds with a sensibly-shaped
 answer, not that the predictions are correct (accuracy is measured in Phase 2/3).
+
+The two baseline models are committed, so these run on a fresh clone. The one
+test that needs the locally built topics parquet is skipped when it is missing.
 """
 
+import os
+
+import pytest
 from fastapi.testclient import TestClient
 
+import src.serving.app as app_module
+from src.brief import retrieval
 from src.serving.app import app
 
 # One client shared by every test (start-up / model loading happens once).
 client = TestClient(app)
+
+# data/processed/complaint_topics.parquet is built by notebooks 00 -> 01 -> 06
+# and is gitignored, so it only exists on a machine that ran the pipeline.
+needs_topics = pytest.mark.skipif(
+    not os.path.exists(retrieval.TOPICS_PARQUET),
+    reason="needs data/processed/complaint_topics.parquet (run notebooks 00, 01, 06)",
+)
 
 # A realistic credit-reporting complaint used by the classify/risk tests.
 SAMPLE_TEXT = (
@@ -72,6 +87,7 @@ def test_classify_rejects_empty_text():
     assert response.status_code == 422
 
 
+@needs_topics
 def test_topics_trends_returns_spikes():
     """/topics/trends returns the Phase 4 spikes, biggest first."""
     response = client.get("/topics/trends?limit=5")
@@ -83,6 +99,13 @@ def test_topics_trends_returns_spikes():
     # Sorted by z-score, high to low.
     z_scores = [s["z_score"] for s in body["spikes"]]
     assert z_scores == sorted(z_scores, reverse=True)
+
+
+def test_topics_trends_503_when_topics_missing(monkeypatch):
+    """Without the topics data the endpoint answers 503 instead of crashing."""
+    monkeypatch.setattr(app_module, "topic_spikes", None)
+    response = client.get("/topics/trends")
+    assert response.status_code == 503
 
 
 def test_brief_latest_returns_markdown():

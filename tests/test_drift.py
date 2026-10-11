@@ -8,11 +8,24 @@ Two quick checks:
      to flag drift - proving the monitor actually reacts when the data changes.
 
 Run with:  pytest tests/test_drift.py
+
+Both checks read data/processed/train.parquet, which notebook 01 builds locally
+(it is gitignored), so they are skipped on a fresh clone.
 """
 
+import os
+
 import pandas as pd
+import pytest
 
 from src.monitoring import drift
+
+TRAIN_PARQUET = "data/processed/train.parquet"
+
+pytestmark = pytest.mark.skipif(
+    not os.path.exists(TRAIN_PARQUET),
+    reason="needs data/processed/train.parquet (run notebooks 00 and 01)",
+)
 
 
 def test_no_drift_against_training_data():

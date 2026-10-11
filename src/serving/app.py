@@ -15,6 +15,8 @@ Design notes (kept deliberately simple):
     request, so requests are fast.
   - The topic spikes are computed once at start-up too (reusing the Phase 5
     retrieval code), because the underlying data does not change while running.
+    They need the locally built topics parquet; without it the API still starts
+    and /topics/trends returns 503.
   - Request and response shapes are declared with pydantic, so FastAPI validates
     inputs automatically and documents everything at /docs.
 
@@ -71,9 +73,14 @@ def load_artifacts():
     monetary_model = joblib.load(MONETARY_MODEL_PATH)
 
     # 1b. Topic spikes for the /topics/trends endpoint (Phase 5 retrieval code).
-    df = retrieval.load_topics()
-    topic_labels = retrieval.build_topic_labels(df)
-    topic_spikes = retrieval.find_spikes(df)
+    #     The topics parquet is built locally by notebooks 00 -> 01 -> 06 and is
+    #     gitignored, so a fresh clone does not have it. In that case the API
+    #     still starts: /classify, /risk and /brief/latest work from committed
+    #     files, and /topics/trends answers 503 until the parquet exists.
+    if os.path.exists(retrieval.TOPICS_PARQUET):
+        df = retrieval.load_topics()
+        topic_labels = retrieval.build_topic_labels(df)
+        topic_spikes = retrieval.find_spikes(df)
 
 
 # ----------------------------------------------------------------------
@@ -197,7 +204,13 @@ def risk(body: ComplaintText, threshold: float = DEFAULT_RISK_THRESHOLD):
 def topics_trends(limit: int = 20):
     """Return the emerging-issue spikes from Phase 4, biggest z-score first."""
     if topic_spikes is None:
-        raise HTTPException(status_code=503, detail="Topics not loaded.")
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"Topics not loaded: {retrieval.TOPICS_PARQUET} is missing. "
+                "Build it with notebooks 00, 01 and 06."
+            ),
+        )
 
     spikes_out = []
     for _, row in topic_spikes.head(limit).iterrows():
