@@ -6,7 +6,22 @@
 - **License:** US Government Public Domain
 - **Full scale:** millions of complaints since 2011; 1M+ include consumer narratives (opt-in since 2015)
 
-## Local snapshot currently in `data/raw/`
+## Six-month dataset (behind every reported result)
+Built by `notebooks/00_data_download.ipynb` and `notebooks/01_data_cleaning.ipynb`; all numbers below are printed by notebook 01.
+
+| Step | Rows |
+|---|---|
+| CFPB complaints with a narrative, Jan 1 – Jun 30 2023 | 234,719 |
+| After removing near-duplicate template narratives | 173,468 (61,251 removed) |
+| Temporal split: train, 2023-01-01 → 2023-05-24 | 138,774 |
+| Temporal split: test (newest 20%), 2023-05-24 → 2023-06-30 | 34,694 |
+| Training sample balanced by product (cap 8,000 per class, rare classes kept whole); both tasks train on it | 47,121 |
+
+- The natural-mix train set (138,774 rows) is kept as `train_natural.parquet` for the transformer's validation set; the test set is never balanced.
+- Monetary-relief label: 3.0% positive in test (1,041 of 34,694), 7.25% in the 47,121-row training sample. Before de-duplication: 5,751 monetary relief, 1,378 untimely, 7,038 escalated.
+- Six-month EDA (`reports/eda_report.md`): median narrative about 149 words, 95% under 619 words; 82.5% contain `XXXX` masks.
+
+## Earlier snapshot (March 2023, used during development)
 - `cfpb_complaints_2023-03.csv` — real export, **71,236 complaints**, 2023-03-01 -> 2023-03-31 (+5 early-April rows)
 - Narratives present: **26,285 (36.9%)**
 - After cleaning + near-duplicate removal: **19,678 rows** -> train 15,742 / test 3,936 (temporal split at 2023-03-27)
@@ -32,4 +47,5 @@
 
 ## Versioning
 - v0 (initial): schema + assumed wrinkles
-- **v0.2 (current):** real measured statistics from the 2023-03 snapshot; leakage guard documented
+- v0.2: real measured statistics from the 2023-03 snapshot; leakage guard documented
+- **v0.3 (current):** six-month dataset funnel added; it is the data behind every reported result

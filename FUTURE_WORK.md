@@ -4,8 +4,9 @@
 far. Last updated 2026-08-17, after Phase 6. Pulled from each phase's own report:
 `reports/eda_report.md`, `baseline_report.md`, `phase3_findings.md`,
 `model_card.md`, `error_analysis_report.md`, `topics_report.md`,
-`phase5_findings.md`, `phase6_findings.md`, and the roadmap stretch goals in
-`02_roadmap.md`.*
+`phase5_findings.md`, `phase6_findings.md`, and the stretch goals from the original
+roadmap (kept outside this repo). Updated 2026-10-11: company-name probe recorded,
+latency measured.*
 
 ## Status legend
 
@@ -49,7 +50,7 @@ far. Last updated 2026-08-17, after Phase 6. Pulled from each phase's own report
 |---|---|---|
 | Per-class Tier 1 breakdown | Produced by notebook 05 — see `error_analysis_report.md` (transformer wins 7/9 classes, biggest gain on Student loan). | DONE |
 | Seed-variance check on the product win | Rerun Tier 1 with 2–3 seeds to confirm the +3 macro-F1 points is stable, not noise. | OPEN |
-| Company-name memorization probe | Built into notebook 05 but its result is not yet in the error-analysis report — run and record it. | PARTIAL |
+| Company-name memorization probe | Notebook 05: accuracy is no higher on the 10,878 test rows that name the company unmasked (baseline 0.822 vs 0.839, transformer 0.841 vs 0.859) — no name shortcut. Recorded in `model_card.md`. | DONE |
 | Calibrate monetary probabilities | Transformer probabilities are over-confident (curve below diagonal); apply Platt/isotonic if the raw number is ever read as a true probability. | OPEN |
 | Longer-context handling | 256-token head truncation drops the tail of long narratives (p95 > 512 tokens). Error analysis shows it isn't clearly hurting, but a sliding-window / longer max_length test would close the question. | OPEN |
 | DeBERTa-v3-base comparison | Would likely edge DistilBERT, but adds cost for a model that isn't shipped anyway. | DECLINED |

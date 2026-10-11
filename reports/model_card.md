@@ -18,8 +18,8 @@ Both are trained as separate models and evaluated on the same held-out test set.
 
 ## Shipped model (decision)
 
-**The production model is the TF-IDF + Logistic Regression baseline** — word+char
-n-grams for the product task, word n-grams for the monetary task, both with
+**The production model is the TF-IDF + Logistic Regression baseline** — word +
+char n-grams for both tasks (as `src/serving/train_baseline.py` builds them), with
 `class_weight="balanced"`. The Tier 1 transformer edges it on product (+3 macro-F1
 points) but is tied on monetary and much heavier to serve, so the baseline remains
 the production model and the Phase 6 serving target. See Limitations and
@@ -35,9 +35,11 @@ the production model and the Phase 6 serving target. See Limitations and
 | Transformer Run 1 (naive: r=8, double correction, balanced val) | 0.6832 | 0.8178 |
 | **Transformer Tier 1 (r=16, single correction, natural val)** | **0.7386** | 0.8537 |
 
-The naive run lost to the baseline; the Tier 1 fix wins by ~3 points. Caveat: the
-Tier 1 result is a single unreplicated run and the per-class breakdown is pending
-the error-analysis notebook (05).
+The naive run lost to the baseline; the Tier 1 fix wins by ~3 points (a single
+unreplicated run). Per class (notebook 05, `reports/error_analysis_report.md`), the
+transformer wins 7 of 9 classes, most on Student loan (F1 0.606 → 0.762), Vehicle
+loan (0.586 → 0.645) and Payday loan (0.492 → 0.551); the baseline keeps Mortgage
+(0.886 vs 0.860) and Credit card (0.737 vs 0.734).
 
 **Task B — monetary-relief risk (binary, ~3% positive; ~1,041 positives in test)**
 
@@ -96,7 +98,9 @@ regulatory determination. A human stays in the loop.
 - **Why the baseline still ships despite losing on product:** the transformer's
   win is ~3 macro-F1 points on a single unreplicated run; the monetary task is a
   tie; and the transformer needs the PyTorch + Transformers + PEFT stack and a GPU
-  to serve at speed, versus a sub-millisecond CPU scikit-learn model. For a triage
+  to serve at speed, versus a CPU scikit-learn model that scores a median-length
+  complaint in about 2.8 ms (single request on a 2-thread CPU;
+  `reports/latency_report.md`). For a triage
   service that cost is not justified by the gain. This is a deliberate cost/benefit
   decision, not a claim that the baseline is more accurate.
 - **Single-run product result:** no seed-variance check yet; treat +3 points as
@@ -106,17 +110,17 @@ regulatory determination. A human stays in the loop.
   triage, but the raw probability should not be read as a true probability without
   calibration (Platt/isotonic).
 - **Head truncation to 256 tokens** discards the tail of long narratives (p95 >
-  512 tokens). Whether that costs accuracy is untested (needs the row-level error
-  analysis).
-- **Narratives are opt-in (~37%) and PII-masked (`XXXX`)**; a company-name
-  memorization check is not yet done (planned in the error analysis).
+  512 tokens). On a 6,000-row sample it does not appear to hurt: transformer
+  accuracy is 0.892 on narratives longer than 256 tokens and 0.831 on shorter ones,
+  ahead of the baseline in both buckets (notebook 05).
+- **Narratives are opt-in (~37%) and PII-masked (`XXXX`).** Company-name probe
+  (notebook 05): on the 10,878 test rows where the company name appears unmasked,
+  accuracy is no higher than elsewhere (baseline 0.822 vs 0.839, transformer 0.841
+  vs 0.859), so neither model leans on the name as a shortcut.
 - **Rare product classes remain the hardest cases** for both models.
 
 ## Deferred / future work
 
-- **Row-level error-analysis notebook (05):** per-class Tier 1 breakdown,
-  disagreement examples, length-vs-truncation slice, company-name memorization
-  ablation.
 - **Seed-variance check** on the Tier 1 product win, if a cleaner resume claim is
   wanted.
 - **XXXX raw-vs-normalized ablation** and the optional **DeBERTa-v3-base**

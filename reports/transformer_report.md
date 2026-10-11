@@ -35,8 +35,9 @@ Tied, baseline a nose ahead.
 ## Serving cost (honest framing)
 
 On the T4 the transformer runs at ~0.2 ms/complaint, but that requires a GPU and
-the full PyTorch + Transformers + PEFT stack. The baseline scores in well under a
-millisecond on **CPU** as a single scikit-learn pickle. The real cost difference
+the full PyTorch + Transformers + PEFT stack. The baseline scores a median-length
+complaint in about 2.8 ms on a 2-thread **CPU** (under 1 ms per complaint in
+batches; `reports/latency_report.md`) as a single scikit-learn pickle. The real cost difference
 is operational — GPU + heavy runtime vs a tiny CPU model — not raw per-item
 latency on a GPU. That cost is why the baseline still ships despite the product
 loss.

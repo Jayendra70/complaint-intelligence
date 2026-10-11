@@ -1,97 +1,132 @@
 # Complaint Intelligence Platform
 
-An end-to-end NLP system over real CFPB consumer complaints: classifies every
-complaint by product, scores monetary-relief risk, detects emerging issues
-before humans notice them, writes grounded citation-backed weekly briefs, and
-serves all of it behind a FastAPI service with drift monitoring.
+[![tests](https://github.com/Jayendra70/complaint-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/Jayendra70/complaint-intelligence/actions/workflows/tests.yml)
 
-> **Status: Phase 6 of 7 complete** — data pipeline, EDA, baseline, DistilBERT+LoRA
-> transformer, emerging-issue topics, grounded LLM brief, and now a running
-> FastAPI service (`/classify`, `/risk`, `/topics/trends`, `/brief/latest`) with
-> drift monitoring, smoke tests, and Docker. **Next: Phase 7** — Streamlit
-> dashboard + README polish (architecture diagram, demo GIF, rehearsed
-> walkthrough). Roadmap: `02_roadmap.md` in the project docs.
+An end-to-end NLP system over real CFPB consumer complaints. It classifies each
+complaint by product, scores the risk that it ends in monetary relief, detects
+emerging issues week by week, writes citation-backed weekly briefs, and serves
+the models through a FastAPI service with drift monitoring.
 
-## Current results (6-month data, Jan–Jun 2023, temporal split)
+## Results
 
-Test set = 34,694 rows at the natural class mix (never balanced). The baseline is
-the **shipped** model; the transformer was improved but not shipped on cost/benefit
-(see `reports/phase3_findings.md`).
+**Data.** 234,719 CFPB complaint narratives from Jan–Jun 2023, reduced to
+173,468 after removing 61,251 near-duplicate template letters. Temporal split:
+138,774 complaints for training (Jan 1 – May 24) and 34,694 for testing
+(May 24 – Jun 30), so the test set is always the future. The product model
+trains on a class-balanced sample of 47,121; the test set keeps its natural mix.
+Details: [`data/DATA_CARD.md`](data/DATA_CARD.md).
 
-| Task | Baseline (shipped) | DistilBERT+LoRA (Tier 1) |
-|---|---|---|
-| Product classification (macro-F1) | **0.7065** | 0.7386 |
-| Monetary-relief risk (PR-AUC) | **0.3337** | 0.3308 |
+| Task | Metric | TF-IDF + LogReg (shipped) | DistilBERT + LoRA |
+|---|---|---|---|
+| Product classification (9 classes) | macro-F1 | 0.7065 | **0.7386** |
+| Monetary-relief risk (3.0% positive in test) | PR-AUC | **0.3337** (≈11× the 0.030 random baseline) | 0.3308 |
 
-Emerging-issue layer: 40 topics, 54 topic-week spikes, seed-stability ARI 0.755
-(`reports/topics_report.md`). Weekly briefs are grounded with mandatory
-complaint-ID citations and pass a 0-hallucination audit (`reports/phase5_findings.md`).
+**The transformer story** ([`reports/phase3_findings.md`](reports/phase3_findings.md)).
+The first DistilBERT + LoRA run scored 0.6832 macro-F1 and lost to the baseline.
+It had corrected class imbalance twice (balanced sampling *and* class weights)
+and early-stopped on a balanced validation set. Fixing both and raising the LoRA
+rank from 8 to 16 lifted it to 0.7386, 3.2 points above the baseline (single
+run, no seed-variance check yet). It wins 7 of 9 classes, most on Student loan
+(F1 0.606 → 0.762; [`reports/error_analysis_report.md`](reports/error_analysis_report.md)).
 
-## Run the API (Phase 6)
+**Why the baseline ships anyway.** On monetary-relief risk the two models tie,
+so the transformer's only gain is +0.032 product F1, and it needs the PyTorch +
+Transformers + PEFT stack and a GPU to be fast. The baseline is one
+scikit-learn pipeline that scores a median-length complaint in about 2.8 ms
+on a 2-thread CPU, or under 1 ms per complaint in batches
+([`reports/latency_report.md`](reports/latency_report.md)).
 
-The API loads two saved baseline models. They are not committed as source — build
-them once (~8 min on a laptop CPU), then start the service:
+**Emerging issues** ([`reports/topics_report.md`](reports/topics_report.md)).
+Sentence-Transformers embeddings → BERTopic (UMAP + HDBSCAN) on a 40,000-narrative
+sample: 40 topics and 54 topic-week spikes (≥ 2 standard deviations above the
+trailing 6-week mean, with ≥ 15 complaints). Re-fitting with another seed gives an
+Adjusted Rand Index of 0.755. The largest spike (z = 21.5, week of 2023-01-16) is
+a cluster of Wells Fargo loan-modification denials.
+
+**Weekly brief** ([`reports/phase5_findings.md`](reports/phase5_findings.md)).
+Retrieval picks representative complaints for each spiking topic, then an LLM
+(via Groq) or an offline template writes the brief. A groundedness audit fails a
+brief if it cites any complaint ID that was not in the evidence or has any factual
+line without a citation. The template briefs pass. The LLM brief for the week of
+2023-01-16 fails: 5 of its 11 claim lines (the headline and the recommendations)
+carry no citation. Making the prompt cite on every line is the next fix.
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    A["CFPB narratives<br/>Jan–Jun 2023"] --> B["Clean, de-duplicate,<br/>leakage guard,<br/>temporal split"]
+    B --> C["TF-IDF + LogReg<br/>(shipped)"]
+    B --> D["DistilBERT + LoRA<br/>(benchmarked, not shipped)"]
+    B --> E["Embeddings → BERTopic<br/>weekly z-score spikes"]
+    E --> F["Retrieval → LLM or template<br/>→ groundedness audit"]
+    C --> G["FastAPI: /classify, /risk"]
+    E --> H["FastAPI: /topics/trends"]
+    F --> I["FastAPI: /brief/latest"]
+    C --> J["Drift monitor<br/>PSI + KS"]
+```
+
+## Run it
 
 ```bash
 python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt          # or requirements-serving.txt for the API only
-python -m src.serving.train_baseline     # writes models/*.joblib + drift_reference.json
-uvicorn src.serving.app:app --reload     # http://localhost:8000/docs
+pip install -r requirements-serving.txt pytest httpx   # API + tests only (no torch)
+uvicorn src.serving.app:app --reload                   # http://localhost:8000/docs
+pytest                                                 # 14 tests
+python -m src.serving.bench_latency                    # CPU latency of the shipped models
 ```
 
-Or with Docker (one command):
+The two shipped models are committed (`models/*.joblib`, pickled with
+scikit-learn 1.9.0, which `requirements-serving.txt` pins). So `/classify`,
+`/risk` and `/brief/latest` work straight after cloning, and 8 of the 14 tests
+run. The other 6 tests, `/topics/trends` and the drift check need the processed
+data, which is gitignored: run notebooks 00 → 01 → 06 to download and build it
+(`pip install -r requirements.txt` for the full environment). To retrain the
+shipped models: `python -m src.serving.train_baseline`.
 
-```bash
-docker compose up --build                # API at http://localhost:8000/docs
-```
-
-Drift check and tests:
-
-```bash
-python -m src.monitoring.drift --current data/processed/test.parquet
-pytest                                   # 8 smoke tests
-```
+Experiments were tracked in MLflow: the baselines locally (experiment
+`phase2_baselines_6mo`) and the transformer runs on Colab. The tracking stores
+stay local; the transformer runs are summarized in
+[`reports/mlflow_runs.md`](reports/mlflow_runs.md).
 
 ## Notebooks (the modelling pipeline, in order)
 
 1. `00_data_download.ipynb` — pull real CFPB data
-2. `01_data_cleaning.ipynb` — clean, label, dedup, temporal split → parquet
+2. `01_data_cleaning.ipynb` — clean, label, de-duplicate, temporal split → parquet
 3. `02_eda.ipynb` — regenerate `reports/eda_report.md` + figures
-4. `03_baseline.ipynb` — Phase 2 baseline (locked)
-5. `04_transformer_colab.ipynb` — Phase 3 DistilBERT+LoRA (Colab T4)
-6. `05_error_analysis.ipynb` — per-class F1, disagreements, truncation, memorization probe
-7. `06_topics_over_time.ipynb` — Phase 4 emerging-issue detection
+4. `03_baseline.ipynb` — TF-IDF + LogReg baselines (locked)
+5. `04_transformer_colab.ipynb` — DistilBERT + LoRA (Colab T4)
+6. `05_error_analysis.ipynb` — per-class F1, disagreements, truncation, company-name probe
+7. `06_topics_over_time.ipynb` — emerging-issue detection
 
 ## Design decisions worth reading
 
 - **Escalation target:** the CFPB dropped `Consumer disputed?` in 2017; the
-  proxy-label decision and its tradeoffs live in `reports/target_decision_memo.md`.
-- **Leakage guard:** the response/timeliness fields that *define* the label are
-  physically dropped from the processed parquet files.
-- **Temporal split:** train on the past, test on the future — mirrors production.
+  proxy-label decision and its trade-offs are in `reports/target_decision_memo.md`.
+- **Leakage guard:** the response and timeliness fields that *define* the label
+  are dropped from the processed parquet files.
+- **Temporal split:** train on the past, test on the future, as in production.
 - **Ship the cheaper model:** the transformer edged the baseline on product but
-  tied on monetary; the baseline is a sub-ms CPU model, so it ships. Improving a
-  model and still declining to deploy it is the judgment on display.
+  tied on monetary relief, and the baseline is a light CPU model, so it ships.
 
-## Limitations (honest section)
+## Limitations
 
 - Only ~26 weeks of history, so emerging-issue spikes are illustrative, not
   battle-tested.
-- The `/classify` confidence is not calibrated (balanced LogReg is over-confident);
+- `/classify` confidence is not calibrated (balanced LogReg is over-confident):
   use it for routing, not as a true probability.
-- Drift monitoring's product reference is the (balanced) training mix, so natural
-  production data legitimately shows high product PSI — set the reference to the
-  production mix for real use (see `reports/phase6_findings.md`).
-- Narrative subset only — conclusions do not transfer to complaints without text.
+- The drift monitor's product reference is the balanced training mix, so natural
+  data legitimately shows high product PSI. Set the reference to the production
+  mix for real use (`reports/phase6_findings.md`).
+- The groundedness audit checks that cited IDs exist and that lines carry
+  citations. It does not check that each cited complaint supports the sentence.
+- The transformer's product win is a single run without a seed-variance check.
+- Narrative subset only: conclusions do not transfer to complaints without text.
+- Latency was measured on a 2-thread cloud VM; rerun `bench_latency` on your
+  machine for local numbers.
 
-## Future work (production hardening)
+## Future work
 
-The service does detection honestly and leaves the automation as documented next
-steps: scheduled + alerting drift checks, logging live requests to a store so PSI
-runs on real traffic (the API currently persists nothing after it answers), a
-push-based worker that auto-classifies every incoming complaint, an automated
-retraining pipeline with a champion/challenger gate (never promote a retrain
-unless it beats the incumbent on a frozen test set), calibrated risk
-probabilities, API auth/rate-limiting, and MLflow model versioning. The complete, phase-by-phase
-backlog (with a priority shortlist) lives in `FUTURE_WORK.md`; the Phase 6 detail
-is in `reports/phase6_findings.md`.
+The full, phase-by-phase backlog with a priority shortlist is in
+[`FUTURE_WORK.md`](FUTURE_WORK.md); serving and monitoring detail is in
+`reports/phase6_findings.md`.

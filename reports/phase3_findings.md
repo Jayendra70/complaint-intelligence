@@ -97,8 +97,9 @@ production model stays the **TF-IDF + Logistic Regression baseline.** The reason
   there.
 - **The product gain is small and unreplicated.** +3 macro-F1 points from a single
   run with no seed check is a real but modest edge, not a decisive one.
-- **The baseline is far cheaper to operate.** It is a small scikit-learn model that
-  scores a complaint in well under a millisecond on CPU, serialized as one pickle.
+- **The baseline is far cheaper to operate.** It is a small scikit-learn model,
+  serialized as one pickle, that scores a median-length complaint in about 2.8 ms
+  on a 2-thread CPU (under 1 ms per complaint in batches; `reports/latency_report.md`).
   The transformer needs the full PyTorch + Transformers + PEFT stack and a GPU to
   be fast; on CPU it is much slower. For a triage/routing service, that is a large
   jump in serving cost and complexity for a 3-point product gain and no monetary
@@ -128,10 +129,9 @@ gain the baseline gives away for free.
 
 ## Future / open work
 
-1. **Row-level error-analysis notebook (05)** — per-class Tier 1 breakdown,
-   disagreement examples where each model is right, a narrative-length-vs-error
-   slice (does 256-token truncation hurt?), and a company-name memorization
-   ablation. *This is the next Phase 3 deliverable.*
+1. **Row-level error-analysis notebook (05)** — done; see
+   `reports/error_analysis_report.md` and `reports/model_card.md` (transformer wins
+   7 of 9 classes; truncation and company-name shortcuts don't appear to hurt).
 2. **Seed-variance check on the product win** — rerun Tier 1 with 2–3 seeds to
    confirm the +3 points is stable, if a cleaner claim is wanted for the resume.
 3. **DeBERTa-v3-base** comparison — out of scope by decision.
