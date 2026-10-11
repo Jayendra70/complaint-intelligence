@@ -2,8 +2,8 @@
 
 All paths are relative to the repo root — the top-level `complaint-intelligence/`
 folder (this repo is the folder you clone; there is no wrapper folder anymore).
-*Last refreshed 2026-08-18 (Phases 0–6 complete; FastAPI service + drift monitor +
-tests + Docker added; repo flattened to top level).*
+*Last refreshed 2026-10-11 (Phases 0–6 complete; the API and 8 of the 14 tests now
+run on a fresh clone; latency benchmark and CI added).*
 
 ## Tree at a glance
 
@@ -18,6 +18,7 @@ complaint-intelligence/
 ├── PROJECT_STRUCTURE.md            (this file)
 ├── conftest.py                     (puts the repo root on the import path for pytest)
 ├── .gitignore
+├── .github/workflows/tests.yml     (CI — runs pytest on every push; data-dependent tests skip)
 ├── data/
 │   ├── DATA_CARD.md
 │   ├── raw/                        (2 CSVs: March file + 6-month file; gitignored)
@@ -34,6 +35,8 @@ complaint-intelligence/
 │   ├── weekly_brief_*.md           (Phase 5 sample briefs — /brief/latest serves the newest)
 │   ├── phase5_findings.md
 │   ├── phase6_findings.md          (Phase 6 — serving & monitoring write-up)
+│   ├── latency_report.md           (CPU latency of the shipped models — bench_latency.py)
+│   ├── mlflow_runs.md              (the Colab MLflow runs for the transformer, as a table)
 │   ├── drift_report.md / drift_report.json  (Phase 6 — written by the drift monitor)
 │   └── figures/
 ├── models/
@@ -44,12 +47,12 @@ complaint-intelligence/
 │   └── drift_reference.json        (Phase 6 — "what normal looks like" for the drift monitor)
 ├── src/
 │   ├── brief/                      (Phase 5 — retrieval, generate, audit, run_weekly_brief)
-│   ├── serving/                    (Phase 6 — train_baseline.py, app.py)
+│   ├── serving/                    (Phase 6 — train_baseline.py, app.py, bench_latency.py)
 │   └── monitoring/                 (Phase 6 — drift.py)
 ├── tests/
-│   ├── test_brief.py               (Phase 5 — 4 tests)
-│   ├── test_api.py                 (Phase 6 — 6 FastAPI smoke tests)
-│   └── test_drift.py               (Phase 6 — 2 drift smoke tests)
+│   ├── test_brief.py               (Phase 5 — 5 tests; 2 run without data)
+│   ├── test_api.py                 (Phase 6 — 7 FastAPI smoke tests; 6 run without data)
+│   └── test_drift.py               (Phase 6 — 2 drift smoke tests; need data)
 ├── dashboard/                      (empty — Phase 7 Streamlit app)
 ├── mlruns_colab/, mlflow.db        (local MLflow tracking — gitignored, kept off GitHub)
 └── venv/                           ⚠️ recreate before running (see the venv note in the project docs)
@@ -61,7 +64,8 @@ complaint-intelligence/
 |---|---|
 | `src/brief/` | Phase 5 grounded-brief module (retrieval → generate → audit → runner). |
 | `src/serving/train_baseline.py` | Fits + SAVES the shipped baseline (word+char TF-IDF → balanced LogReg) for both tasks; also writes `models/drift_reference.json`. Run once before starting the API. |
-| `src/serving/app.py` | FastAPI app: `/health`, `/classify`, `/risk`, `/topics/trends`, `/brief/latest`. Loads models + topic spikes once at start-up. |
+| `src/serving/app.py` | FastAPI app: `/health`, `/classify`, `/risk`, `/topics/trends`, `/brief/latest`. Loads models + topic spikes once at start-up; without the topics parquet it still starts and `/topics/trends` returns 503. |
+| `src/serving/bench_latency.py` | Times the shipped models on CPU (single request and batch); writes `reports/latency_report.md`. |
 | `src/monitoring/drift.py` | PSI + KS on narrative length and PSI on predicted-product mix vs the training reference; writes `reports/drift_report.{json,md}`. |
 
 ## notebooks/ — the modelling pipeline, in execution order
@@ -73,7 +77,7 @@ complaint-intelligence/
 | `02_eda.ipynb` | 1 | done |
 | `03_baseline.ipynb` | 2 | done — baseline product 0.7065, monetary 0.3337 |
 | `04_transformer_colab.ipynb` | 3 | done — Tier 1 product 0.7386, monetary 0.3308 |
-| `05_error_analysis.ipynb` | 3 | built (run when venv is recreated) |
+| `05_error_analysis.ipynb` | 3 | done — per-class F1, truncation slice, company-name probe |
 | `06_topics_over_time.ipynb` | 4 | done — 40 topics, 54 spikes, ARI 0.755 |
 
 ## How to run the service (Phase 6)
@@ -82,8 +86,8 @@ complaint-intelligence/
 python -m src.serving.train_baseline     # build models/*.joblib + drift_reference.json (~8 min)
 uvicorn src.serving.app:app --reload     # http://localhost:8000/docs
 python -m src.monitoring.drift --current data/processed/test.parquet
-pytest                                   # 8 smoke tests (brief + api + drift)
-docker compose up --build                # same API, containerised
+pytest                                   # 14 tests (8 run on a fresh clone; 6 need data/processed/)
+python -m src.serving.bench_latency      # CPU latency of the shipped models
 ```
 
 ## Empty-for-now directories (filled later)
