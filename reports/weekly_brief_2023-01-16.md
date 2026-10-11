@@ -1,3 +1,7 @@
+# Weekly Complaint Brief - week of 2023-01-16
+
+*Generated in LLM mode (Groq) by `src.brief.run_weekly_brief`. Fails the groundedness audit: 5 of 11 claim lines carry no citation; see `reports/phase5_findings.md`.*
+
 **## Headline**  
 Wells Fargo sees sharp spikes in mortgage‑modification denials, unauthorized account actions, and auto‑loan disputes during the week of 2023‑01‑16.  
 

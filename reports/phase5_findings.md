@@ -38,12 +38,19 @@ about complaints it was handed, and we measure whether it obeyed.
 
 ## Groundedness results
 
-On both sample briefs the offline pipeline scores a clean pass:
+The two offline (template) briefs pass. The one LLM-written brief fails on
+uncited lines:
 
-| Brief | Citations | Hallucinated IDs | Unsupported-claim rate | Result |
-|---|---|---|---|---|
-| week of 2023-01-16 | 21 (9 unique) | 0 | 0.0 | PASS |
-| week of 2023-05-08 | 21 (9 unique) | 0 | 0.0 | PASS |
+| Brief | Mode | Citations | Hallucinated IDs | Unsupported-claim rate | Result |
+|---|---|---|---|---|---|
+| week of 2023-01-16 (`sample_weekly_brief.md`) | template | 21 (9 unique) | 0 | 0.0 | PASS |
+| week of 2023-05-08 (`weekly_brief_2023-05-08.md`) | template | 21 (9 unique) | 0 | 0.0 | PASS |
+| week of 2023-01-16 (`weekly_brief_2023-01-16.md`) | LLM (Groq) | 30 (15 unique) | needs that week's evidence pack; rerun locally | 0.455 (5 of 11 lines) | FAIL |
+
+The LLM brief's 5 uncited lines are its headline and its recommended actions.
+So far the clean audits come from the template; on LLM output the audit is doing
+its job by catching lines with no citation. Next: require a citation on every
+line in the prompt, including the headline and actions, and rerun.
 
 The audit is also negatively tested: a brief citing a fake ID (`9999999`) and a
 citation-free claim is correctly marked FAIL with the fake ID listed and the
