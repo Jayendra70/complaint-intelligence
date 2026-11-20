@@ -1,118 +1,56 @@
-"""
-Phase 6 - Train and SAVE the shipped baseline models so the API can load them.
+"""Fit and save the shipped TF-IDF + LogisticRegression models and the drift reference.
 
-Phase 2 trained the baseline inside notebook 03 but never saved it to disk. The
-FastAPI service needs the fitted model on disk, so this script re-fits the exact
-same baseline (same features, same settings as notebook 03) and saves it.
+Re-fits the notebook 03 baseline for both tasks, checks the test scores against the
+reported numbers (product macro-F1 0.7065, monetary PR-AUC 0.3337), and writes
+models/baseline_*.joblib and models/drift_reference.json.
 
-It fits two models, both text-only:
-  1. product  - 9-class LogisticRegression  (which product the complaint is about)
-  2. monetary - binary   LogisticRegression  (will the company pay money back?)
-
-It also, as a check, scores them on the held-out test set and prints the numbers,
-which must match the locked Phase 2 baseline (product macro-F1 0.7065,
-monetary PR-AUC 0.3337).
-
-Finally it writes models/drift_reference.json - the "what normal looks like"
-snapshot the drift monitor (src/monitoring/drift.py) compares new data against.
-
-Run it once (on the Mac, after recreating the venv):
     python -m src.serving.train_baseline
 """
 
 import json
-import os
 
+import joblib
 import numpy as np
 import pandas as pd
-import joblib
-
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.pipeline import FeatureUnion, Pipeline
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import f1_score, average_precision_score
+from sklearn.metrics import average_precision_score, f1_score
+from sklearn.pipeline import FeatureUnion, Pipeline
 
+from src import config
+from src.monitoring.drift import word_count
 
-# ----------------------------------------------------------------------
-# 0. Settings (all paths and knobs in one place)
-# ----------------------------------------------------------------------
-
-TRAIN_PARQUET = "data/processed/train.parquet"
-TEST_PARQUET = "data/processed/test.parquet"
-
-MODELS_DIR = "models"
-PRODUCT_MODEL_PATH = os.path.join(MODELS_DIR, "baseline_product.joblib")
-MONETARY_MODEL_PATH = os.path.join(MODELS_DIR, "baseline_monetary.joblib")
-DRIFT_REFERENCE_PATH = os.path.join(MODELS_DIR, "drift_reference.json")
-
-TEXT_COLUMN = "consumer_complaint_narrative"
 PRODUCT_LABEL = "product"
 MONETARY_LABEL = "is_monetary_relief"
 
-RANDOM_STATE = 42
 
-
-# ----------------------------------------------------------------------
-# 1. Build the feature+model pipeline (exactly the Phase 2 baseline)
-# ----------------------------------------------------------------------
-
-def build_pipeline():
-    """
-    One pipeline = TF-IDF word features AND char features side by side, fed to
-    a class-balanced Logistic Regression. Same settings as notebook 03, so the
-    scores come out the same. Saving the whole pipeline means the API just calls
-    .predict() on raw text - the text-to-numbers step travels with the model.
-    """
-    # Word features: single words and 2-word phrases seen in >= 3 complaints.
+def build_pipeline() -> Pipeline:
+    """Word 1-2-gram + char 3-5-gram TF-IDF into a class-balanced LogisticRegression."""
     word_tfidf = TfidfVectorizer(
         ngram_range=(1, 2), min_df=3, max_features=60000, sublinear_tf=True
     )
-    # Character features: 3-to-5-char chunks (robust to typos and XXXX masks).
     char_tfidf = TfidfVectorizer(
-        analyzer="char_wb", ngram_range=(3, 5), min_df=3,
-        max_features=60000, sublinear_tf=True
+        analyzer="char_wb", ngram_range=(3, 5), min_df=3, max_features=60000, sublinear_tf=True
     )
-    # Both feature sets glued together, word first then char (same as notebook 03).
     features = FeatureUnion([("word", word_tfidf), ("char", char_tfidf)])
-
     classifier = LogisticRegression(
-        max_iter=3000, class_weight="balanced", random_state=RANDOM_STATE
+        max_iter=3000, class_weight="balanced", random_state=config.RANDOM_STATE
     )
-
     return Pipeline([("features", features), ("clf", classifier)])
 
 
-# ----------------------------------------------------------------------
-# 2. Build the drift reference snapshot
-# ----------------------------------------------------------------------
-
-def word_count(text_series):
-    """Number of words in each narrative (a plain, fast length measure)."""
-    return text_series.astype(str).str.split().apply(len)
-
-
-def build_drift_reference(train, product_pipeline):
-    """
-    Save a small snapshot of 'normal' so the monitor can spot drift later:
-      - length_bin_edges / length_ref_props : the shape of narrative lengths
-      - length_sample                       : 5000 raw lengths (for the KS test)
-      - product_ref_props                   : how often the model predicts each product
-    """
-    # 2a. Narrative-length distribution on the training data.
-    lengths = word_count(train[TEXT_COLUMN])
-    # 10 bins by quantile so each bin holds a similar share of training rows.
-    bin_edges = np.quantile(lengths, np.linspace(0, 1, 11))
-    bin_edges = np.unique(bin_edges)  # drop any duplicate edges
+def build_drift_reference(train: pd.DataFrame, product_pipeline: Pipeline) -> None:
+    """Save the training-time length distribution and predicted product mix."""
+    lengths = word_count(train[config.TEXT_COLUMN])
+    # Quantile bins so each bin holds a similar share of training rows.
+    bin_edges = np.unique(np.quantile(lengths, np.linspace(0, 1, 11)))
     ref_counts, _ = np.histogram(lengths, bins=bin_edges)
     ref_props = ref_counts / ref_counts.sum()
 
-    # A random sample of raw lengths, used by the KS test in the monitor.
-    rng = np.random.default_rng(RANDOM_STATE)
-    sample_size = min(5000, len(lengths))
-    length_sample = rng.choice(lengths.values, size=sample_size, replace=False)
+    rng = np.random.default_rng(config.RANDOM_STATE)
+    length_sample = rng.choice(lengths.values, size=min(5000, len(lengths)), replace=False)
 
-    # 2b. Predicted-product distribution on the training data.
-    predicted = product_pipeline.predict(train[TEXT_COLUMN])
+    predicted = product_pipeline.predict(train[config.TEXT_COLUMN])
     product_counts = pd.Series(predicted).value_counts()
     product_props = (product_counts / product_counts.sum()).to_dict()
 
@@ -123,52 +61,35 @@ def build_drift_reference(train, product_pipeline):
         "product_ref_props": {str(k): float(v) for k, v in product_props.items()},
         "n_reference_rows": int(len(train)),
     }
-    with open(DRIFT_REFERENCE_PATH, "w") as f:
-        json.dump(reference, f, indent=2)
-    print("Saved", DRIFT_REFERENCE_PATH)
+    config.DRIFT_REFERENCE_PATH.write_text(json.dumps(reference, indent=2))
+    print("Saved", config.DRIFT_REFERENCE_PATH)
 
 
-# ----------------------------------------------------------------------
-# 3. Main: fit, score, save
-# ----------------------------------------------------------------------
+def main() -> None:
+    config.MODELS_DIR.mkdir(exist_ok=True)
 
-def main():
-    os.makedirs(MODELS_DIR, exist_ok=True)
+    train = pd.read_parquet(config.TRAIN_PARQUET)
+    test = pd.read_parquet(config.TEST_PARQUET)
+    print(f"train: {len(train)}  test: {len(test)}")
+    text = config.TEXT_COLUMN
 
-    print("Loading data ...")
-    train = pd.read_parquet(TRAIN_PARQUET)
-    test = pd.read_parquet(TEST_PARQUET)
-    print("  train:", len(train), " test:", len(test))
-
-    # --- Product model -------------------------------------------------
-    print("\nFitting product model (9-class) ...")
+    print("Fitting product model ...")
     product_pipeline = build_pipeline()
-    product_pipeline.fit(train[TEXT_COLUMN], train[PRODUCT_LABEL])
+    product_pipeline.fit(train[text], train[PRODUCT_LABEL])
+    product_pred = product_pipeline.predict(test[text])
+    macro_f1 = f1_score(test[PRODUCT_LABEL], product_pred, average="macro")
+    print(f"  test macro-F1: {macro_f1:.4f}  (reported: 0.7065)")
+    joblib.dump(product_pipeline, config.PRODUCT_MODEL_PATH)
 
-    product_pred = product_pipeline.predict(test[TEXT_COLUMN])
-    product_macro_f1 = f1_score(test[PRODUCT_LABEL], product_pred, average="macro")
-    print("  test macro-F1:", round(product_macro_f1, 4), " (Phase 2 locked: 0.7065)")
-
-    joblib.dump(product_pipeline, PRODUCT_MODEL_PATH)
-    print("  saved", PRODUCT_MODEL_PATH)
-
-    # --- Monetary model ------------------------------------------------
-    print("\nFitting monetary-relief model (binary) ...")
+    print("Fitting monetary-relief model ...")
     monetary_pipeline = build_pipeline()
-    monetary_pipeline.fit(train[TEXT_COLUMN], train[MONETARY_LABEL])
+    monetary_pipeline.fit(train[text], train[MONETARY_LABEL])
+    scores = monetary_pipeline.predict_proba(test[text])[:, 1]
+    pr_auc = average_precision_score(test[MONETARY_LABEL], scores)
+    print(f"  test PR-AUC: {pr_auc:.4f}  (reported: 0.3337)")
+    joblib.dump(monetary_pipeline, config.MONETARY_MODEL_PATH)
 
-    monetary_scores = monetary_pipeline.predict_proba(test[TEXT_COLUMN])[:, 1]
-    monetary_pr_auc = average_precision_score(test[MONETARY_LABEL], monetary_scores)
-    print("  test PR-AUC:", round(monetary_pr_auc, 4), " (Phase 2 locked: 0.3337)")
-
-    joblib.dump(monetary_pipeline, MONETARY_MODEL_PATH)
-    print("  saved", MONETARY_MODEL_PATH)
-
-    # --- Drift reference ----------------------------------------------
-    print("\nBuilding drift reference snapshot ...")
     build_drift_reference(train, product_pipeline)
-
-    print("\nDone. Models and drift reference are in the models/ folder.")
 
 
 if __name__ == "__main__":

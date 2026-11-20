@@ -1,41 +1,28 @@
-"""
-Latency benchmark for the shipped baseline models (CPU only).
-
-The model card says the TF-IDF + LogisticRegression baseline is cheap to serve.
-This script measures it instead of asserting it: it loads the two saved models
-and times predict_proba on complaints of realistic length.
+"""CPU latency benchmark for the shipped baseline models.
 
     python -m src.serving.bench_latency                      # synthetic narratives
     python -m src.serving.bench_latency --parquet data/processed/test.parquet
 
-Synthetic narratives are built at the median (149 words) and 95th-percentile
-(619 words) lengths reported in reports/eda_report.md. With --parquet it times
-real narratives from that file instead (column consumer_complaint_narrative).
-
-It prints a table and writes reports/latency_report.md. Timings depend on the
-machine, so the report records the CPU count, Python and scikit-learn versions.
+Synthetic narratives use the median (149 words) and 95th-percentile (619 words)
+lengths from reports/eda_report.md. Writes reports/latency_report.md.
 """
 
 import argparse
 import os
 import platform
 import statistics
-import sys
 import time
+from pathlib import Path
 
 import joblib
 import sklearn
 
-PRODUCT_MODEL_PATH = "models/baseline_product.joblib"
-MONETARY_MODEL_PATH = "models/baseline_monetary.joblib"
-REPORT_PATH = "reports/latency_report.md"
-TEXT_COLUMN = "consumer_complaint_narrative"
+from src import config
 
-MEDIAN_WORDS = 149   # reports/eda_report.md
-P95_WORDS = 619      # reports/eda_report.md
+REPORT_PATH = config.REPORTS_DIR / "latency_report.md"
+MEDIAN_WORDS = 149
+P95_WORDS = 619
 
-# Sentences in the style of real CFPB narratives (PII masked as XXXX), used to
-# build synthetic complaints of a chosen length.
 SENTENCES = [
     "I found several inaccurate accounts on my credit report from XXXX.",
     "The credit bureau has not corrected them after my dispute in XX/XX/2023.",
@@ -50,9 +37,8 @@ SENTENCES = [
 ]
 
 
-def synthetic_text(n_words, offset=0):
-    """Repeat the sentences (starting at a different one each time) to n words."""
-    words = []
+def synthetic_text(n_words: int, offset: int = 0) -> str:
+    words: list[str] = []
     i = offset
     while len(words) < n_words:
         words.extend(SENTENCES[i % len(SENTENCES)].split())
@@ -60,9 +46,9 @@ def synthetic_text(n_words, offset=0):
     return " ".join(words[:n_words])
 
 
-def time_single(model, texts, repeats):
-    """Time one complaint per call, like one API request. Returns ms per call."""
-    model.predict_proba(texts[:1])  # warm-up
+def time_single(model, texts: list[str], repeats: int) -> tuple[float, float]:
+    """p50 and p95 milliseconds for one complaint per call (one API request)."""
+    model.predict_proba(texts[:1])
     times_ms = []
     for r in range(repeats):
         text = texts[r % len(texts)]
@@ -70,26 +56,25 @@ def time_single(model, texts, repeats):
         model.predict_proba([text])
         times_ms.append((time.perf_counter() - start) * 1000)
     times_ms.sort()
-    p50 = statistics.median(times_ms)
-    p95 = times_ms[int(0.95 * (len(times_ms) - 1))]
-    return p50, p95
+    return statistics.median(times_ms), times_ms[int(0.95 * (len(times_ms) - 1))]
 
 
-def time_batch(model, texts):
-    """Time one call over the whole batch. Returns ms per complaint."""
+def time_batch(model, texts: list[str]) -> float:
+    """Milliseconds per complaint for one call over the whole batch."""
     start = time.perf_counter()
     model.predict_proba(texts)
     return (time.perf_counter() - start) * 1000 / len(texts)
 
 
-def load_texts(parquet_path, n):
+def load_texts(parquet_path: str, n: int) -> list[str]:
     import pandas as pd
-    df = pd.read_parquet(parquet_path, columns=[TEXT_COLUMN])
-    texts = df[TEXT_COLUMN].dropna().astype(str)
-    return texts.sample(min(n, len(texts)), random_state=42).tolist()
+
+    df = pd.read_parquet(parquet_path, columns=[config.TEXT_COLUMN])
+    texts = df[config.TEXT_COLUMN].dropna().astype(str)
+    return texts.sample(min(n, len(texts)), random_state=config.RANDOM_STATE).tolist()
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--parquet", help="time real narratives from this parquet")
     parser.add_argument("--repeats", type=int, default=300)
@@ -97,19 +82,21 @@ def main():
     args = parser.parse_args()
 
     models = {
-        "product (9-class)": joblib.load(PRODUCT_MODEL_PATH),
-        "monetary-relief risk": joblib.load(MONETARY_MODEL_PATH),
+        "product (9-class)": joblib.load(config.PRODUCT_MODEL_PATH),
+        "monetary-relief risk": joblib.load(config.MONETARY_MODEL_PATH),
     }
 
     if args.parquet:
         real = load_texts(args.parquet, max(args.repeats, args.batch))
-        workloads = {"real narratives (%s)" % os.path.basename(args.parquet): real}
+        workloads = {f"real narratives ({Path(args.parquet).name})": real}
     else:
         workloads = {
-            f"median length ({MEDIAN_WORDS} words)":
-                [synthetic_text(MEDIAN_WORDS, k) for k in range(args.batch)],
-            f"95th percentile ({P95_WORDS} words)":
-                [synthetic_text(P95_WORDS, k) for k in range(args.batch)],
+            f"median length ({MEDIAN_WORDS} words)": [
+                synthetic_text(MEDIAN_WORDS, k) for k in range(args.batch)
+            ],
+            f"95th percentile ({P95_WORDS} words)": [
+                synthetic_text(P95_WORDS, k) for k in range(args.batch)
+            ],
         }
 
     rows = []
@@ -134,18 +121,20 @@ def main():
     print(table)
     print("Machine:", machine)
 
-    with open(REPORT_PATH, "w") as f:
-        f.write("# Baseline serving latency (CPU)\n\n")
-        f.write("Generated by `python -m src.serving.bench_latency"
-                + (f" --parquet {args.parquet}" if args.parquet else "") + "`.\n\n")
-        f.write(f"Machine: {machine}.\n\n")
-        f.write("Single request = one complaint per `predict_proba` call (what one API "
-                f"request does), {args.repeats} calls after a warm-up. Batch = one call "
-                f"over {args.batch} complaints. Timings cover TF-IDF vectorizing "
-                "(word 1-2-grams + char 3-5-grams) plus the classifier, not HTTP.\n\n")
-        f.write(table)
+    command = "python -m src.serving.bench_latency" + (
+        f" --parquet {args.parquet}" if args.parquet else ""
+    )
+    REPORT_PATH.write_text(
+        "# Baseline serving latency (CPU)\n\n"
+        f"Generated by `{command}`.\n\n"
+        f"Machine: {machine}.\n\n"
+        "Single request = one complaint per `predict_proba` call (what one API "
+        f"request does), {args.repeats} calls after a warm-up. Batch = one call "
+        f"over {args.batch} complaints. Timings cover TF-IDF vectorizing "
+        "(word 1-2-grams + char 3-5-grams) plus the classifier, not HTTP.\n\n" + table
+    )
     print(f"Wrote {REPORT_PATH}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

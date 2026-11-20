@@ -1,32 +1,23 @@
-# ── Data & experiment artifacts (never committed) ──
+# Data and experiment tracking
 data/raw/
 data/processed/
 mlruns/
+mlruns_colab/
 mlflow.db
 *.db
+*_export.csv.gz
 
-# ── Environments ──
+# Environments
 venv/
 .venv/
 .env
 
-# ── Python ──
+# Python
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .pytest_cache/
+.ruff_cache/
 
-# ── OS / editor ──
+# OS
 .DS_Store
-
-# ── Local scratch (not for GitHub) ──
-_to_delete/
-_TRASH_review_and_delete/
-
-# ── one-time transfer artifacts ──
-*_export.csv.gz
-
-# Colab MLflow logbook (kept locally, not on GitHub)
-mlruns_colab/
-# personal study plan (lives in the DL Project new folder)
-PHASE6_STUDY_PLAN.md

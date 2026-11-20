@@ -1,12 +1,4 @@
-# Phase 6 - one command to run the Complaint Intelligence service.
-#
-#   docker compose up --build
-#
-# Then open http://localhost:8000/docs
-#
-# Right now this wires up just the API. The Streamlit dashboard is built in
-# Phase 7; when dashboard/ exists, uncomment the `dashboard` service below and
-# it will run alongside the API.
+# docker compose up --build   ->   http://localhost:8000/docs
 
 services:
   api:
@@ -14,23 +6,6 @@ services:
     image: complaint-api
     ports:
       - "8000:8000"
-    healthcheck:
-      # Poll the /health endpoint so `docker compose ps` shows healthy/unhealthy.
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-  # --- Phase 7 (dashboard) - uncomment when dashboard/ is built ---------------
-  # dashboard:
-  #   build:
-  #     context: .
-  #     dockerfile: dashboard/Dockerfile
-  #   image: complaint-dashboard
-  #   ports:
-  #     - "8501:8501"
-  #   depends_on:
-  #     - api
-  #   environment:
-  #     - API_URL=http://api:8000
+    # Uncomment to serve /topics/trends from locally built data.
+    # volumes:
+    #   - ./data/processed:/app/data/processed:ro

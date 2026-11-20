@@ -1,53 +1,32 @@
-"""
-Phase 6 - Smoke test for the drift monitor.
-
-Two quick checks:
-  1. Comparing the training data against itself shows (almost) no drift - the
-     metrics are near zero. This proves the monitor doesn't cry wolf.
-  2. Comparing against a deliberately shortened batch pushes the length KS test
-     to flag drift - proving the monitor actually reacts when the data changes.
-
-Run with:  pytest tests/test_drift.py
-
-Both checks read data/processed/train.parquet, which notebook 01 builds locally
-(it is gitignored), so they are skipped on a fresh clone.
-"""
-
-import os
+"""Drift monitor: quiet on the training data itself, fires on shortened narratives."""
 
 import pandas as pd
 import pytest
 
+from src import config
 from src.monitoring import drift
 
-TRAIN_PARQUET = "data/processed/train.parquet"
-
 pytestmark = pytest.mark.skipif(
-    not os.path.exists(TRAIN_PARQUET),
+    not config.TRAIN_PARQUET.exists(),
     reason="needs data/processed/train.parquet (run notebooks 00 and 01)",
 )
 
 
 def test_no_drift_against_training_data():
-    """Train-vs-train: PSI numbers should be tiny (no real drift)."""
-    report = drift.run_drift_check("data/processed/train.parquet")
+    report = drift.run_drift_check(config.TRAIN_PARQUET)
     checks = {c["metric"]: c for c in report["checks"]}
-    # Both PSIs are essentially zero when comparing the reference to itself.
     assert checks["narrative_length_psi"]["value"] < drift.PSI_MODERATE
     assert checks["predicted_product_psi"]["value"] < drift.PSI_MODERATE
 
 
 def test_drift_flagged_on_shortened_text(tmp_path):
-    """Chop every narrative down to a few words -> the length KS test flags it."""
-    train = pd.read_parquet("data/processed/train.parquet")
-    shortened = train.copy()
-    shortened[drift.TEXT_COLUMN] = (
-        shortened[drift.TEXT_COLUMN].astype(str).str.split().str[:3].str.join(" ")
-    )
+    shortened = pd.read_parquet(config.TRAIN_PARQUET)
+    text = config.TEXT_COLUMN
+    shortened[text] = shortened[text].astype(str).str.split().str[:3].str.join(" ")
     path = tmp_path / "shortened.parquet"
     shortened.to_parquet(path)
 
-    report = drift.run_drift_check(str(path))
+    report = drift.run_drift_check(path)
     checks = {c["metric"]: c for c in report["checks"]}
     assert checks["narrative_length_ks"]["drifted"] is True
     assert report["drift_detected"] is True
