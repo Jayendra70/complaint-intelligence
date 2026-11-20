@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from src import config
 from src.brief import retrieval
 
-BRIEF_GLOB = "weekly_brief_*.md"
+BRIEF_GLOB = "weekly_brief_????-??-??.md"
 DEFAULT_RISK_THRESHOLD = 0.5
 
 

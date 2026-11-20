@@ -14,7 +14,7 @@ RUN pip install --no-cache-dir -r requirements-serving.txt
 
 COPY src/ ./src/
 COPY models/ ./models/
-COPY reports/weekly_brief_*.md ./reports/
+COPY reports/weekly_brief_????-??-??.md ./reports/
 
 RUN useradd --create-home --uid 1000 app && chown -R app /app
 USER app
