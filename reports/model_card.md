@@ -1,10 +1,10 @@
 # Model Card — Complaint Intelligence Classifiers
 
-*Phase 3 deliverable. Reflects the 6-month run, including the Tier 1 transformer
-rerun. The shipped model is the TF-IDF + Logistic Regression baseline; the
-DistilBERT + LoRA transformer is documented here as an honest, benchmarked
-comparison that — after a fix — beats the baseline on product but is still not
-worth shipping. Full reasoning: `reports/phase3_findings.md`.*
+*Reflects the 6-month run, including the Tier 1 transformer rerun. The shipped
+model is the TF-IDF + Logistic Regression baseline. The DistilBERT + LoRA
+transformer is documented as a benchmarked comparison: after a fix it beats the
+baseline on product, but it isn't worth shipping. Full reasoning:
+`reports/transformer_vs_baseline.md`.*
 
 ## Overview
 
@@ -22,8 +22,8 @@ Both are trained as separate models and evaluated on the same held-out test set.
 char n-grams for both tasks (as `src/serving/train_baseline.py` builds them), with
 `class_weight="balanced"`. The Tier 1 transformer edges it on product (+3 macro-F1
 points) but is tied on monetary and much heavier to serve, so the baseline remains
-the production model and the Phase 6 serving target. See Limitations and
-`reports/phase3_findings.md` for the full cost/benefit reasoning.
+the production model and the one `src/serving/` serves. See Limitations and
+`reports/transformer_vs_baseline.md` for the full cost/benefit reasoning.
 
 ## Metrics (6-month, same natural test set)
 
@@ -78,7 +78,7 @@ positive rate they flatter the model.
 - **Source:** CFPB Consumer Complaint Database, 6-month file (Jan–Jun 2023).
 - **Product task train:** class-balanced by sampling (cap ~8,000/class), rare
   classes kept in full. **Test: 34,694 rows at the natural class mix** (never
-  balanced), so reported scores are honest.
+  balanced), so reported scores reflect real traffic.
 - **Split:** temporal (train on older complaints, test on newer) — mirrors
   production, avoids look-ahead leakage.
 - **Leakage guard:** outcome-defining columns (company response, timely
@@ -121,7 +121,6 @@ regulatory determination. A human stays in the loop.
 
 ## Deferred / future work
 
-- **Seed-variance check** on the Tier 1 product win, if a cleaner resume claim is
-  wanted.
+- **Seed-variance check** on the Tier 1 product win.
 - **XXXX raw-vs-normalized ablation** and the optional **DeBERTa-v3-base**
   comparison (out of scope by decision).

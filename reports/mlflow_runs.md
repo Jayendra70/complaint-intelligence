@@ -1,10 +1,9 @@
 # MLflow runs — DistilBERT + LoRA, Tier 1 (Colab)
 
-The transformer runs were tracked in MLflow on Colab. The raw tracking store
-(`mlruns_colab/`) is kept local, not on GitHub; it was in the first commit
-(`940f85a`) and removed from the repo in `a74f77b`. This table restates its four
-runs (experiment id `136298397859160813`). The Phase 2 baselines were tracked in a
-separate local store (`mlruns/`, experiment `phase2_baselines_6mo`).
+The transformer runs were tracked in MLflow on Colab. The tracking store
+(`mlruns_colab/`) isn't committed, so this table restates its four runs
+(experiment id `136298397859160813`). The baselines were tracked in a separate
+local store (`mlruns/`, experiment `phase2_baselines_6mo`).
 
 All four runs: `distilbert-base-uncased`, LoRA, learning rate 2e-4,
 `max_length` 256. Validation is on the natural-mix validation set.

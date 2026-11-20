@@ -1,7 +1,9 @@
 # EDA Report — CFPB Complaint Narratives
 
-Based on the cleaned training data (47121 complaints). The test set is
-kept aside and not looked at here.
+Based on the cleaned training data (47121 complaints). This is the
+class-balanced training sample, so product shares differ from the natural mix
+(where credit reporting is ~65%). The test set is kept aside and not looked at
+here.
 
 ## Main points
 
@@ -13,7 +15,7 @@ kept aside and not looked at here.
   we care about PR-AUC and threshold tuning, not plain accuracy.
 - Narrative length: about **149** words typically; 95% are under
   **619** words (~866 tokens). Some are longer than BERT's
-  512-token limit, so truncation is a real choice we make in Phase 3.
+  512-token limit, so truncation is a real choice for the transformer.
 - **82.5%** of narratives contain "XXXX" (blacked-out personal info).
 - The top 10 companies make up **44.4%** of all complaints.
 

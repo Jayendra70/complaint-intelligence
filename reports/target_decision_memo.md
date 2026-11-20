@@ -33,8 +33,8 @@ from **3.1% to ~35%** and silently poison every downstream model.
 | **is_escalated = 1 (union)** | **819** | **3.1%** |
 
 After dedup the train-split positive rate is **4.1%** — a genuinely imbalanced
-target, which is exactly what makes the modeling honest: PR-AUC, calibrated
-probabilities and threshold tuning (Phase 2), not accuracy.
+target, so the modelling uses PR-AUC, calibrated probabilities and threshold
+tuning, not accuracy.
 
 ## Why not the pre-2017 slice (Option B)?
 Training on 2015–2017 data with the real `Consumer disputed?` flag was
@@ -75,11 +75,13 @@ writes three label columns:
 
 Overlap between the two components is 9 rows, so this is a **multi-label**
 (two-heads) problem, not multi-class — the classes are not mutually exclusive.
-Phase 2 baselines will be trained and reported per-component, with the union
+The baselines are trained and reported per component, with the union
 score derived from the component predictions if triage needs one number.
 
 Related robustness note: company names appear un-redacted in narratives
 (measured: ~34% of top-10-company complaints mention their own company; 65-84%
 for the big banks). For `is_untimely` especially, a text model may shortcut to
-company identity. Phase 3 error analysis includes a company-name-masking
-ablation and per-company slice metrics to quantify this.
+company identity. The error analysis (notebook 05) checked this with a
+company-name probe: on the 10,878 test rows that name the company unmasked,
+accuracy is no higher than elsewhere, so neither model leans on the name. A
+full company-name-masking ablation is still open.
