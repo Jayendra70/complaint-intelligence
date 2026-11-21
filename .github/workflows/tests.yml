@@ -22,3 +22,19 @@ jobs:
           ruff format --check .
       - name: Test (data-dependent tests skip on CI)
         run: pytest -rs
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t complaint-api .
+      - name: Start container and check /health
+        run: |
+          docker run -d -p 8000:8000 --name api complaint-api
+          for i in $(seq 1 30); do
+            curl -fs localhost:8000/health && exit 0
+            sleep 2
+          done
+          docker logs api
+          exit 1

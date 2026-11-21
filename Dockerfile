@@ -16,7 +16,8 @@ COPY src/ ./src/
 COPY models/ ./models/
 COPY reports/weekly_brief_????-??-??.md ./reports/
 
-RUN useradd --create-home --uid 1000 app && chown -R app /app
+# Code and models stay root-owned and read-only; the server runs unprivileged.
+RUN useradd --uid 1000 --no-create-home app
 USER app
 
 EXPOSE 8000
